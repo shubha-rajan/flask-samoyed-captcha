@@ -27,13 +27,10 @@ import uuid
 import base64
 import requests
 
-<<<<<<< HEAD
+import pdb
+
 from flask import Flask, jsonify, request
 import sqlalchemy # type: ignore
-=======
-from flask import Flask, jsonify
-import sqlalchemy  # type: ignore
->>>>>>> 02349b9bb21cb2e3311dae303232e9c269c0e71f
 
 from google.cloud import storage  # type: ignore
 from google.cloud import automl_v1beta1 as automl # type: ignore
@@ -48,7 +45,6 @@ PREDICTION_CLIENT = automl.PredictionServiceClient()
 # If `entrypoint` is not defined in app.yaml, App Engine will look for an app
 # called `app` in `main.py`.
 app = Flask(__name__)
-
 
 def captcha_dict(image: str, identify: str) -> dict:
     """Converts an image name to a dict as returned by the API
@@ -187,16 +183,20 @@ def get_prediction_from_db(url: str):
     stmt = sqlalchemy.text(
         "SELECT (jamie, alice)"
         " FROM predictions WHERE public_url = :url"
-        "LIMIT 1"
+        " LIMIT 1"
     )
 
     with db_connection.connect() as conn:
         result = conn.execute(stmt, url=url)
 
-    if len(result) == 0:
+    if result.rowcount == 0:
         return None
     else:
-        return {"jamie": result[0]['jamie'], "alice": result[0]['alice']}
+        return ({
+            "url": url,
+            "jamie": result[0]['jamie'], 
+            "alice": result[0]['alice']
+        })
 
 
 def get_prediction_from_api(url: str):
@@ -210,18 +210,24 @@ def get_prediction_from_api(url: str):
             each label as values.
     """
 
-    img_bytes = base64.b64encode(requests.get(url).content)
+    img_bytes = requests.get(url).content
+    
     payload = {"image": {"image_bytes": img_bytes}}
+    params = { "score_threshold": "0.0" }
 
-    model_full_id = automl_client.model_path(
+    model_full_id = AUTOML_CLIENT.model_path(
         PROJECT_ID, COMPUTE_REGION, MODEL_ID
     )
     result = {}
-    response = PREDICTION_CLIENT.predict(model_full_id, payload)
-    for label in response:
+    response = PREDICTION_CLIENT.predict(model_full_id, payload, params)
+    for label in response.payload:
         result[label.display_name] = label.classification.score
 
-    return result
+    return ({
+        "url": url,
+        "jamie": result['jamie'],
+        "alice": result['alice'],
+    })
 
 def save_prediction(result: dict):
     """ Retrieves data from prediction table
@@ -242,17 +248,19 @@ def save_prediction(result: dict):
         instance=CSQL_CONNECTION, username=DB_USER, password=DB_PWD, database=DB_NAME
     )
 
-    created_at = datetime.datetime.utcnow()
+    
+    url = result['url']
+    label = "jamie" if "jamie" in url else "alice"
     jamie = result['jamie']
     alice = result['alice']
     stmt = sqlalchemy.text(
-        "INSERT INTO predictions (created_at, public_url, jamie, alice)"
-        " VALUES (:created_at, :url, :jamie, :alice)"
+        "INSERT INTO predictions (label, public_url, jamie, alice)"
+        " VALUES (:label, :url, :jamie, :alice)"
     )
 
     with db_connection.connect() as conn:
         conn.execute(
-            stmt, created_at=created_at, url=url, jamie=jamie, alice=alice
+            stmt,label=label, url=url, jamie=jamie, alice=alice
         )
 
 
@@ -303,7 +311,7 @@ def return_prediction() -> Dict:
             "alice": "29.04"
         }
     """
-    url = request.form.get('url')
+    url = request.get_json(force=True).get('url')
     result = get_prediction_from_db(url)
     if result:
         return result
@@ -314,6 +322,9 @@ def return_prediction() -> Dict:
 
     resp = jsonify(result)
     resp.headers["Access-Control-Allow-Origin"] = "*"
+    resp.headers['Content-Type'] = 'application/json'
+    resp.headers['Access-Control-Allow-Methods'] = 'POST'
+
     return resp
 
 @app.route("/", methods=["GET"])  # type: ignore
