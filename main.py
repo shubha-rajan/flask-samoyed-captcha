@@ -191,9 +191,9 @@ def get_prediction_from_db(url: str):
     with db_connection.connect() as conn:
         result = conn.execute(stmt, url=url)
 
-    if len(result) == 0 
+    if len(result) == 0:
         return None
-    else
+    else:
         return {"jamie": result[0]['jamie'], "alice": result[0]['alice']}
 
 
@@ -219,7 +219,7 @@ def get_prediction_from_api(url: str):
     for label in response:
         result[label.display_name] = label.classification.score
 
-   return result
+    return result
 
 def save_prediction(result: dict):
     """ Retrieves data from prediction table
@@ -289,7 +289,7 @@ def who_to_identify(images: List[str]) -> str:
 
 @app.route("/predict", methods=["POST"])  # type: ignore
 def return_prediction() -> Dict:
-     """Route handler for the API.
+    """Route handler for the API.
 
     Args:
         None (decorated as a Flask route)
