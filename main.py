@@ -24,15 +24,21 @@ import platform
 import random
 from typing import Any, Dict, List
 import uuid
+import base64
+import requests
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, request
 import sqlalchemy # type: ignore
 
 from google.cloud import storage  # type: ignore
+from google.cloud import automl_v1beta1 as automl # type: ignore
 
-from config import STORAGE_BUCKET, DB_USER, DB_PWD, DB_NAME, CSQL_CONNECTION
+from config import (STORAGE_BUCKET, DB_USER, DB_PWD, DB_NAME, CSQL_CONNECTION,
+                    PROJECT_ID, COMPUTE_REGION, MODEL_ID)
 
 STORAGE_CLIENT = storage.Client()
+AUTOML_CLIENT = automl.AutoMlClient()
+PREDICTION_CLIENT = automl.PredictionServiceClient()
 
 # If `entrypoint` is not defined in app.yaml, App Engine will look for an app
 # called `app` in `main.py`.
@@ -160,6 +166,93 @@ def save_captcha(data: dict) -> None:
 
     pass  # /// insert the thumbnails rows
 
+def get_prediction_from_db(url: str):
+    """ Retrieves data from prediction table
+        
+        Args:
+            url: a string representing the public url of a blob
+
+        Returns:
+            Dict. A dict containing the labels as keys and the confidence for 
+            each label as values.
+    """
+
+    # create database connection
+    db_connection = cloudsql_postgres(
+        instance=CSQL_CONNECTION, username=DB_USER, password=DB_PWD, database=DB_NAME
+    )
+
+    stmt = sqlalchemy.text(
+        "SELECT (jamie, alice)"
+        " FROM predictions WHERE public_url = :url"
+        "LIMIT 1"
+    )
+
+    with db_connection.connect() as conn:
+        result = conn.execute(stmt, url=url)
+
+    if len(result) == 0 
+        return None
+    else
+        return {"jamie": result[0]['jamie'], "alice": result[0]['alice']}
+
+
+def get_prediction_from_api(url: str):
+    """ Retrieves data from prediction table
+        
+        Args:
+            url: a string representing the public url of a blob
+
+        Returns:
+            Dict. A dict containing the labels as keys and the confidence for 
+            each label as values.
+    """
+
+    img_bytes = base64.b64encode(requests.get(url).content)
+    payload = {"image": {"image_bytes": img_bytes}}
+
+    model_full_id = automl_client.model_path(
+        PROJECT_ID, COMPUTE_REGION, MODEL_ID
+    )
+    result = {}
+    response = PREDICTION_CLIENT.predict(model_full_id, payload)
+    for label in response:
+        result[label.display_name] = label.classification.score
+
+   return result
+
+def save_prediction(result: dict):
+    """ Retrieves data from prediction table
+        
+        Args:
+            result: a dict which maps labels to confidence scores:
+            {
+                "jamie': <float representing confidence score>,
+                "alice": <float representing confidence score>
+            }
+
+
+        Returns:
+            None. Writes data to prediction table
+    """
+
+    db_connection = cloudsql_postgres(
+        instance=CSQL_CONNECTION, username=DB_USER, password=DB_PWD, database=DB_NAME
+    )
+
+    created_at = datetime.datetime.utcnow()
+    jamie = result['jamie']
+    alice = result['alice']
+    stmt = sqlalchemy.text(
+        "INSERT INTO predictions (created_at, public_url, jamie, alice)"
+        " VALUES (:created_at, :url, :jamie, :alice)"
+    )
+
+    with db_connection.connect() as conn:
+        conn.execute(
+            stmt, created_at=created_at, url=url, jamie=jamie, alice=alice
+        )
+
 
 def thumbnail_name(blobname: str) -> bool:
     """Returns True if the blobname is a valid thumbnail image name
@@ -194,6 +287,32 @@ def who_to_identify(images: List[str]) -> str:
     )
     return "jamie" if jamie_count > alice_count else "alice"
 
+@app.route("/predict", methods=["POST"])  # type: ignore
+def return_prediction() -> Dict:
+     """Route handler for the API.
+
+    Args:
+        None (decorated as a Flask route)
+
+    Returns:
+        JSON serialization of a dict that maps labels to confidence scores:
+        {
+            "jamie': "70.96",
+            "alice": "29.04"
+        }
+    """
+    url = request.form.get('url')
+    result = get_prediction_from_db(url)
+    if result:
+        return result
+
+    result = get_prediction_from_api(url)
+
+    save_prediction(result)
+
+    resp = jsonify(result)
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
 
 @app.route("/", methods=["GET"])  # type: ignore
 def captcha_api() -> Any:
