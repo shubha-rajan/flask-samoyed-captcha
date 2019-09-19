@@ -27,8 +27,13 @@ import uuid
 import base64
 import requests
 
+<<<<<<< HEAD
 from flask import Flask, jsonify, request
 import sqlalchemy # type: ignore
+=======
+from flask import Flask, jsonify
+import sqlalchemy  # type: ignore
+>>>>>>> 02349b9bb21cb2e3311dae303232e9c269c0e71f
 
 from google.cloud import storage  # type: ignore
 from google.cloud import automl_v1beta1 as automl # type: ignore
@@ -68,11 +73,11 @@ def cloudsql_postgres(
     username: str,
     password: str,
     database: str,
-    driver: str="postgres+pg8000",
-    pool_size: int=5,
-    max_overflow: int=2,
-    pool_timeout: int=30,
-    pool_recycle: int=1800
+    driver: str = "postgres+pg8000",
+    pool_size: int = 5,
+    max_overflow: int = 2,
+    pool_timeout: int = 30,
+    pool_recycle: int = 1800,
 ) -> Any:
     """Creates a SQLAlchemy connection for a Cloud SQL Postgres instance.
 
@@ -96,30 +101,27 @@ def cloudsql_postgres(
     """
 
     if platform.system() == "Windows":
-        return sqlalchemy.create_engine(
-            f"{driver}://postgres:{password}@127.0.0.1:5432/{database}",
-            pool_size=pool_size,
-            max_overflow=max_overflow,
-            pool_timeout=pool_timeout,
-            pool_recycle=pool_recycle,
-        )
-
-    # If not Windows, we assume a Linux-compatible OS.
-    unix_socket: Dict[str, str] = {"unix_sock": "/cloudsql/{}/.s.PGSQL.5432".format(instance)}
-    connection = sqlalchemy.create_engine(
-        sqlalchemy.engine.url.URL(
+        connection_string = f"{driver}://postgres:{password}@127.0.0.1:5432/{database}"
+    else:
+        # If not Windows, we assume a Linux-compatible OS.
+        unix_socket: Dict[str, str] = {
+            "unix_sock": "/cloudsql/{}/.s.PGSQL.5432".format(instance)
+        }
+        connection_string = sqlalchemy.engine.url.URL(
             drivername=driver,
             username=username,
             password=password,
             database=database,
             query=unix_socket,
-        ),
+        )
+
+    return sqlalchemy.create_engine(
+        connection_string,
         pool_size=pool_size,
         max_overflow=max_overflow,
         pool_timeout=pool_timeout,
         pool_recycle=pool_recycle,
     )
-    return connection
 
 
 def list_blobs(bucket_name: str, delimiter: str = "/") -> List[str]:
@@ -152,16 +154,16 @@ def save_captcha(data: dict) -> None:
     )
 
     # insert the captcha row
-    created_at = datetime.datetime.utcnow()
-    identify = data["identify"]
-    captcha_id = data["captcha_id"]
     stmt = sqlalchemy.text(
         "INSERT INTO captcha (created_at, identify, captcha_id)"
         " VALUES (:created_at, :identify, :captcha_id)"
     )
     with db_connection.connect() as conn:
         conn.execute(
-            stmt, created_at=created_at, identify=identify, captcha_id=captcha_id
+            stmt,
+            created_at=datetime.datetime.utcnow(),
+            identify=data["identify"],
+            captcha_id=data["captcha_id"],
         )
 
     pass  # /// insert the thumbnails rows
