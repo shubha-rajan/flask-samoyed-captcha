@@ -158,12 +158,71 @@ def pick_images(candidates) -> set:
 
 @app.route('/response/<captcha_id>', methods = ['POST'])
 def response_handler(captcha_id):
-    """///docstring
+    """Save a user's response to the captcha.
+
+    The data structure POSTed to this endpoint is 9 booleans, each
+    indicating whether the user correctly identified the corresponding
+    image from the captcha.
     """
-    data = request.form
-    print(f"Endpoint: /response/{captcha_id}")
-    print(f"    Data: {data}")
-    return f"Endpoint: /response/{captcha_id}\n    Data: {data}"
+    #data = request.form
+    data = request.get_json(force=True)
+
+    # create database connection
+    db_connection = cloudsql_postgres(
+        instance=CSQL_CONNECTION, username=DB_USER, password=DB_PWD, database=DB_NAME
+    )
+
+    # save the responses for the individual images
+    for image_no in range(1, 10):
+        success = data[f"image{image_no}"]
+        public_url = get_public_url(captcha_id, image_no, db_connection)
+        save_response(captcha_id, public_url, success, db_connection)
+        pass
+
+    captcha_handled(captcha_id, db_connection) # set submitted_at
+
+    return f"Here is the data object we received:\n{data}"
+
+def get_public_url(captcha_id, image_no, db_connection):
+    """Get the public_url associated with a captcha_id and image_no.
+    """
+    result = db_connection.execute(
+        f'SELECT public_url FROM thumbnail WHERE captcha_id = "{captcha_id}" AND image_no = {image_no}')
+    for row in result:
+        public_url = row["public_url"]
+    db_connection.close()
+
+    return public_url
+
+
+def save_response(captcha_id, public_url, success, db_connection):
+    """Inserts a record in the responses table.
+    """
+    stmt = sqlalchemy.text(
+        "INSERT INTO responses (captcha_id, public_url, label, success)"
+        " VALUES (:captcha_id, :public_url, :label, :success)"
+    )
+    with db_connection.connect() as conn:
+        conn.execute(
+            stmt,
+            captcha_id=captcha_id,
+            public_url=public_url,
+            label=url_to_label(public_url),
+            success=success,
+        )
+
+
+def captcha_handled(captcha_id, db_connection):
+    # update captcha.submitted_at for this captcha_id
+    stmt = sqlalchemy.text(
+        "UPDATE captcha SET submitted_at = :submitted_at WHERE captcha_id = :captcha_id"
+    )
+    with db_connection.connect() as conn:
+        conn.execute(
+            stmt,
+            submitted_at=datetime.datetime.utcnow(),
+            captcha_id=captcha_id,
+        )
 
 
 def save_captcha(data: dict) -> None:
