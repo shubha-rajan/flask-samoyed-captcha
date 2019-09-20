@@ -218,7 +218,7 @@ def get_prediction_from_db(url: str):
     )
 
     stmt = sqlalchemy.text(
-        "SELECT (jamie, alice)"
+        "SELECT jamie, alice"
         " FROM predictions WHERE public_url = :url"
         " LIMIT 1"
     )
@@ -228,12 +228,15 @@ def get_prediction_from_db(url: str):
 
     if result.rowcount == 0:
         return None
-    else:
-        return ({
-            "url": url,
-            "jamie": result.rows[0]['jamie'], 
-            "alice": result.rows[0]['alice']
-        })
+
+    prediction = {'url' : url}
+
+    for row in result:
+            for key in row.keys():
+                prediction[key] = row[key]
+
+    return prediction
+    
 
 
 def get_prediction_from_api(url: str):
@@ -350,12 +353,10 @@ def return_prediction() -> Dict:
     """
     url = request.get_json(force=True).get('url')
     result = get_prediction_from_db(url)
-    if result:
-        return result
-
-    result = get_prediction_from_api(url)
-
-    save_prediction(result)
+    if not result:
+        result = get_prediction_from_api(url)
+        save_prediction(result)
+    
 
     resp = jsonify(result)
     resp.headers["Access-Control-Allow-Origin"] = "*"
