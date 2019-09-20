@@ -21,6 +21,7 @@ https://cloud.google.com/appengine/docs/standard/python3/quickstart
 import datetime
 import logging
 import platform
+from pprint import pprint as pp
 import random
 from typing import Any, Dict, List
 import uuid
@@ -46,12 +47,12 @@ PREDICTION_CLIENT = automl.PredictionServiceClient()
 # called `app` in `main.py`.
 app = Flask(__name__)
 
-def captcha_dict(image: str, identify: str) -> dict:
+def captcha_dict(image: str, label: str) -> dict:
     """Converts an image name to a dict as returned by the API
 
     Args:
         image: the public_url of a blob (thumbnail image) in the GCS bucket
-        identify: who to identify (either "jamie" or "alice")
+        label: who to identify (either "jamie" or "alice")
 
     Returns:
     A dict with these keys, derived from the blob name:
@@ -60,7 +61,7 @@ def captcha_dict(image: str, identify: str) -> dict:
         alice: whether photo includes Alice (bool)
     """
     filename: str = image.split("/")[-1].lower()
-    return {"url": image, "match": filename.startswith(identify)}
+    return {"url": image, "match": filename.startswith(label)}
 
 
 def cloudsql_postgres(
@@ -134,7 +135,7 @@ def list_blobs(bucket_name: str, delimiter: str = "/") -> List[str]:
     return [blob.public_url for blob in blobs]
 
 
-def pick_images(candidates):
+def pick_images(candidates) -> set:
     """Returns 9 images from a list of image URLs, assuring that the
     returned list includes at least one Jamie and one Alice, and no
     duplicates.
@@ -143,16 +144,15 @@ def pick_images(candidates):
     # one of each.
     jamies = [image for image in candidates if "jamie" in image.lower()]
     alices = [image for image in candidates if "alice" in image.lower()]
-    images = [random.choice(jamies), random.choice(alices)]
+    images = set([random.choice(jamies), random.choice(alices)])
 
     # Next we add 7 more random images, without duplicating any selected images.
     while len(images) < 9:
-        selection = random.choice(candidates)
-        if selection not in images:
-            images.append(selection)
+        images.add(random.choice(candidates))
 
     # Shuffle the list and return it.
-    random.shuffle(images)
+    image_list = list(images)
+    random.shuffle(image_list)
     return images
 
 
@@ -173,18 +173,33 @@ def save_captcha(data: dict) -> None:
 
     # insert the captcha row
     stmt = sqlalchemy.text(
-        "INSERT INTO captcha (created_at, identify, captcha_id)"
-        " VALUES (:created_at, :identify, :captcha_id)"
+        "INSERT INTO captcha (created_at, label, captcha_id)"
+        " VALUES (:created_at, :label, :captcha_id)"
     )
     with db_connection.connect() as conn:
         conn.execute(
             stmt,
             created_at=datetime.datetime.utcnow(),
-            identify=data["identify"],
+            label=data["label"],
             captcha_id=data["captcha_id"],
         )
 
-    pass  # /// insert the thumbnails rows
+    # insert the thumbnails rows
+    stmt = sqlalchemy.text(
+        "INSERT INTO thumbnail (public_url, image_no, captcha_id, label)"
+        " VALUES (:public_url, :image_no, :captcha_id, :label)"
+    )
+    for image_no in range(1, 10):
+        image_dict = data[f"image{image_no}"]
+        with db_connection.connect() as conn:
+            conn.execute(
+                stmt,
+                public_url=image_dict["url"],
+                image_no=image_no,
+                captcha_id=data["captcha_id"],
+                label=str(image_dict["match"]),
+            )
+
 
 def get_prediction_from_db(url: str):
     """ Retrieves data from prediction table
@@ -216,8 +231,8 @@ def get_prediction_from_db(url: str):
     else:
         return ({
             "url": url,
-            "jamie": result[0]['jamie'], 
-            "alice": result[0]['alice']
+            "jamie": result.rows[0]['jamie'], 
+            "alice": result.rows[0]['alice']
         })
 
 
@@ -364,7 +379,7 @@ def captcha_api() -> Any:
         JSON serialization of a random selection of 9 captcha images,
         as a dict with this structure:
         {"captcha_id": "<unique id for this response>",
-         "identify": "<who to identify in each image; jamie or alice>",
+         "label": "<who to identify in each image; jamie or alice>",
          "image1": {"url": "<public_url of image>", "match": <bool>},
          "image2": {"url": "<public_url of image>", "match": <bool>},
          "image3": {"url": "<public_url of image>", "match": <bool>},
@@ -381,12 +396,12 @@ def captcha_api() -> Any:
     blobs = list_blobs(STORAGE_BUCKET)
     thumbnails = [blob for blob in blobs if thumbnail_name(blob)]
     images = pick_images(thumbnails)  # 9 random thumbnails
-    identify = who_to_identify(images)
-    image_dicts = [captcha_dict(image, identify) for image in images]
+    label = who_to_identify(images)
+    image_dicts = [captcha_dict(image, label) for image in images]
     captcha_id = str(uuid.uuid4())  # unique identifier, 36 characters
     data = {
         "captcha_id": captcha_id,
-        "identify": identify,
+        "label": label,
         "image1": image_dicts[0],
         "image2": image_dicts[1],
         "image3": image_dicts[2],
