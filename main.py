@@ -142,8 +142,8 @@ def pick_images(candidates) -> set:
     """
     # First select a random Jamie and a random Alice, so that we have at least
     # one of each.
-    jamies = [image for image in candidates if "jamie" in image.lower()]
-    alices = [image for image in candidates if "alice" in image.lower()]
+    jamies = [image for image in candidates if url_to_label(image) == "jamie"]
+    alices = [image for image in candidates if url_to_label(image) == "alice"]
     images = set([random.choice(jamies), random.choice(alices)])
 
     # Next we add 7 more random images, without duplicating any selected images.
@@ -154,6 +154,16 @@ def pick_images(candidates) -> set:
     image_list = list(images)
     random.shuffle(image_list)
     return images
+
+
+@app.route('/response/<captcha_id>', methods = ['POST'])
+def response_handler(captcha_id):
+    """///docstring
+    """
+    data = request.form
+    print(f"Endpoint: /response/{captcha_id}")
+    print(f"    Data: {data}")
+    return f"Endpoint: /response/{captcha_id}\n    Data: {data}"
 
 
 def save_captcha(data: dict) -> None:
@@ -197,7 +207,7 @@ def save_captcha(data: dict) -> None:
                 public_url=image_dict["url"],
                 image_no=image_no,
                 captcha_id=data["captcha_id"],
-                label=str(image_dict["match"]),
+                label=url_to_label(image_dict["url"]),
             )
 
 
@@ -290,7 +300,6 @@ def save_prediction(result: dict):
 
     
     url = result['url']
-    label = "jamie" if "jamie" in url else "alice"
     jamie = result['jamie']
     alice = result['alice']
     stmt = sqlalchemy.text(
@@ -300,7 +309,7 @@ def save_prediction(result: dict):
 
     with db_connection.connect() as conn:
         conn.execute(
-            stmt,label=label, url=url, jamie=jamie, alice=alice
+            stmt,label=url_to_label(url), url=url, jamie=jamie, alice=alice
         )
 
 
@@ -317,6 +326,14 @@ def thumbnail_name(blobname: str) -> bool:
     return filename.endswith(".jpg") and (
         filename.startswith("jamie") or filename.startswith("alice")
     )
+
+
+def url_to_label(public_url: str) -> str:
+    """Determines the label ("jamie" or "alice" from a GCS public_url).
+    Note that we assume the naming scheme of this project, with all images
+    named either jamieNNN.jpg or aliceNNN.jpg.
+    """
+    return public_url.split("/")[-1][:5].lower()
 
 
 def who_to_identify(images: List[str]) -> str:
