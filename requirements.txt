@@ -1,5 +1,6 @@
 Flask==1.0.2
 google-api-python-client
 google-cloud-storage
+google-cloud-automl
 sqlalchemy
 pg8000
