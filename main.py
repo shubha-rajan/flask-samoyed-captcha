@@ -127,6 +127,28 @@ def list_blobs(bucket_name: str, delimiter: str = "/") -> List[str]:
     return [blob.public_url for blob in blobs]
 
 
+def pick_images(candidates):
+    """Returns 9 images from a list of image URLs, assuring that the
+    returned list includes at least one Jamie and one Alice, and no
+    duplicates.
+    """
+    # First select a random Jamie and a random Alice, so that we have at least
+    # one of each.
+    jamies = [image for image in candidates if "jamie" in image.lower()]
+    alices = [image for image in candidates if "alice" in image.lower()]
+    images = [random.choice(jamies), random.choice(alices)]
+
+    # Next we add 7 more random images, without duplicating any selected images.
+    while len(images) < 9:
+        selection = random.choice(candidates)
+        if selection not in images:
+            images.append(selection)
+
+    # Shuffle the list and return it.
+    random.shuffle(images)
+    return images
+
+
 def save_captcha(data: dict) -> None:
     """Saves a captcha response to the database.
 
@@ -193,8 +215,12 @@ def who_to_identify(images: List[str]) -> str:
 
 
 @app.route("/", methods=["GET"])  # type: ignore
+@app.route("/captcha", methods=["GET"])  # type: ignore
 def captcha_api() -> Any:
     """Route handler for the API.
+
+    Preferred useage is /captcha endpoint, but we include the root / here
+    for quick manual testing.
 
     Args:
         None (decorated as a Flask route)
@@ -219,7 +245,7 @@ def captcha_api() -> Any:
     # create the data structure to be returned
     blobs = list_blobs(STORAGE_BUCKET)
     thumbnails = [blob for blob in blobs if thumbnail_name(blob)]
-    images = random.choices(thumbnails, k=9)  # 9 random thumbnails
+    images = pick_images(thumbnails)  # 9 random thumbnails
     identify = who_to_identify(images)
     image_dicts = [captcha_dict(image, identify) for image in images]
     captcha_id = str(uuid.uuid4())  # unique identifier, 36 characters
