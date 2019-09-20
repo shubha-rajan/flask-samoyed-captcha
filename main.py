@@ -216,8 +216,8 @@ def get_prediction_from_db(url: str):
     else:
         return ({
             "url": url,
-            "jamie": result[0]['jamie'], 
-            "alice": result[0]['alice']
+            "jamie": result.rows[0]['jamie'], 
+            "alice": result.rows[0]['alice']
         })
 
 
