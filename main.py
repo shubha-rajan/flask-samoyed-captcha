@@ -156,6 +156,16 @@ def pick_images(candidates) -> set:
     return images
 
 
+@app.route('/response/<captcha_id>', methods = ['POST'])
+def response_handler(captcha_id):
+    """///docstring
+    """
+    data = request.form
+    print(f"Endpoint: /response/{captcha_id}")
+    print(f"    Data: {data}")
+    return f"Endpoint: /response/{captcha_id}\n    Data: {data}"
+
+
 def save_captcha(data: dict) -> None:
     """Saves a captcha response to the database.
 
