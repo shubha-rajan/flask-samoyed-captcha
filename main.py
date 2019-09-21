@@ -187,10 +187,9 @@ def get_public_url(captcha_id, image_no, db_connection):
     """Get the public_url associated with a captcha_id and image_no.
     """
     result = db_connection.execute(
-        f'SELECT public_url FROM thumbnail WHERE captcha_id = "{captcha_id}" AND image_no = {image_no}')
+        f"SELECT public_url FROM thumbnail WHERE captcha_id = '{captcha_id}' AND image_no = {image_no}")
     for row in result:
         public_url = row["public_url"]
-    db_connection.close()
 
     return public_url
 
