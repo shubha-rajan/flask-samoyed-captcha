@@ -21,7 +21,7 @@ https://cloud.google.com/appengine/docs/standard/python3/quickstart
 import datetime
 import logging
 import platform
-from pprint import pprint as pp
+from pprint import pprint
 import random
 from typing import Any, Dict, List
 import uuid
@@ -441,72 +441,6 @@ def return_prediction() -> Dict:
     resp.headers['Access-Control-Allow-Methods'] = 'POST'
 
     return resp
-
-@app.route('/matrix', methods=["GET"])
-def get_confusion_matrix():
-    """Route handler for the API.
-
-    Args:
-        None (decorated as a Flask route)
-
-    Returns:
-        JSON serialization of a dict that includes the number of correct and incorrect 
-        guesses by the model for each label:
-        {
-            "jamie': "70.96",
-            "alice": "29.04"
-        }
-    """
-    model_full_id = AUTOML_CLIENT.model_path(PROJECT_ID, COMPUTE_REGION, MODEL_ID)
-    response = AUTOML_CLIENT.list_model_evaluations(model_full_id)
-    for element in response:
-        # There is evaluation for each class in a model and for overall model.
-        # Get only the evaluation of overall model.
-        if not element.annotation_spec_id:
-            model_evaluation_id = element.name.split("/")[-1]
-        
-    # Resource name for the model evaluation.
-    model_evaluation_full_id = AUTOML_CLIENT.model_evaluation_path(
-        PROJECT_ID, COMPUTE_REGION, MODEL_ID, model_evaluation_id
-    )
-
-    # Get a model evaluation.
-    model_evaluation = AUTOML_CLIENT.get_model_evaluation(model_evaluation_full_id)
-
-    class_metrics = model_evaluation.classification_evaluation_metrics
-    conf_matrix = class_metrics.confusion_matrix
-
-    # There's no way to get a label from an annotation_spec_id so these values are hard-coded
-    spec_ids = {
-        '1290556582108238520': 'jamie', 
-        '6243011096337340587': 'alice'
-    }
-    if spec_ids[conf_matrix.annotation_spec_id[0]] == 'jamie': 
-        jamie_correct = conf_matrix.row[0].example_count[0]
-        alice_incorrect = conf_matrix.row[0].example_count[1]
-        jamie_incorrect = conf_matrix.row[1].example_count[0]
-        alice_correct = conf_matrix.row[1].example_count[1]
-    elif spec_ids[conf_matrix.annotation_spec_id[0]] == 'alice': 
-        alice_correct = conf_matrix.row[0].example_count[0]
-        jamie_incorrect = conf_matrix.row[0].example_count[1]
-        alice_incorrect = conf_matrix.row[1].example_count[0]
-        jamie_correct = conf_matrix.row[1].example_count[1]
-
-
-    result = {
-        "jamie": {
-            "correct": jamie_correct,
-            "incorrect": jamie_incorrect
-        }, 
-        "alice": {
-            "correct": alice_correct,
-            "incorrect": alice_incorrect
-        }
-    }
-    resp = jsonify(result)
-    resp.headers["Access-Control-Allow-Origin"] = "*"
-    return resp
-
 
 @app.route("/", methods=["GET"])  # type: ignore
 @app.route("/captcha", methods=["GET"])  # type: ignore
