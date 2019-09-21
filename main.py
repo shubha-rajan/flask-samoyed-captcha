@@ -30,7 +30,7 @@ import requests
 
 import pdb
 
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, Response
 import sqlalchemy # type: ignore
 
 from google.cloud import storage  # type: ignore
@@ -181,16 +181,17 @@ def response_handler(captcha_id):
 
     captcha_handled(captcha_id, db_connection) # set submitted_at
 
-    return f"Here is the data object we received:\n{data}"
+    response = Response(status=200)
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    return Response
 
 def get_public_url(captcha_id, image_no, db_connection):
     """Get the public_url associated with a captcha_id and image_no.
     """
     result = db_connection.execute(
-        f'SELECT public_url FROM thumbnail WHERE captcha_id = "{captcha_id}" AND image_no = {image_no}')
+        f"SELECT public_url FROM thumbnail WHERE captcha_id = '{captcha_id}' AND image_no = {image_no}")
     for row in result:
         public_url = row["public_url"]
-    db_connection.close()
 
     return public_url
 
