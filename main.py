@@ -183,7 +183,7 @@ def response_handler(captcha_id):
 
     response = Response(status=200)
     response.headers["Access-Control-Allow-Origin"] = "*"
-    return Response
+    return response
 
 def get_public_url(captcha_id, image_no, db_connection):
     """Get the public_url associated with a captcha_id and image_no.
