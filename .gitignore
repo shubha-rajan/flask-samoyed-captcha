@@ -1,0 +1,7 @@
+__pycache__/
+.vscode/
+
+.gcloudignore
+*.bat
+*.json
+*.exe
