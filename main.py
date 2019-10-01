@@ -36,6 +36,8 @@ import sqlalchemy # type: ignore
 from google.cloud import storage  # type: ignore
 from google.cloud import automl_v1beta1 as automl # type: ignore
 
+from util import cloudsql_postgres
+
 from config import (STORAGE_BUCKET, DB_USER, DB_PWD, DB_NAME, CSQL_CONNECTION,
                     PROJECT_ID, COMPUTE_REGION, MODEL_ID)
 
@@ -62,63 +64,6 @@ def captcha_dict(image: str, label: str) -> dict:
     """
     filename: str = image.split("/")[-1].lower()
     return {"url": image, "match": filename.startswith(label)}
-
-
-def cloudsql_postgres(
-    *,
-    instance: str,
-    username: str,
-    password: str,
-    database: str,
-    driver: str = "postgres+pg8000",
-    pool_size: int = 5,
-    max_overflow: int = 2,
-    pool_timeout: int = 30,
-    pool_recycle: int = 1800,
-) -> Any:
-    """Creates a SQLAlchemy connection for a Cloud SQL Postgres instance.
-
-    Args:
-        instance: Cloud SQL instance name (project:region:instance)
-        username: database user to connect as
-        password: password for username
-        database: name of the database within the Cloud SQL instance
-        driver: driver name
-        poolsize: maximum number of permanent connections
-        max_overflow: number of connections to temporarily exceed pool_size
-                      if no connections available
-        pool_timeout: maximum # seconds to wait for a new connection
-        pool_recycle: number of seconds until a connection will be recycled
-
-    Returns:
-        A SQLAlchemy connection instance created with create_engine.
-        We assume that if this code is running on Windows (for local dev/test)
-        then we're connecting to Cloud SQL via the proxy, so need to use
-        localhost instead of a Unix socket for the connection.
-    """
-
-    if platform.system() == "Windows":
-        connection_string = f"{driver}://postgres:{password}@127.0.0.1:5432/{database}"
-    else:
-        # If not Windows, we assume a Linux-compatible OS.
-        unix_socket: Dict[str, str] = {
-            "unix_sock": "/cloudsql/{}/.s.PGSQL.5432".format(instance)
-        }
-        connection_string = sqlalchemy.engine.url.URL(
-            drivername=driver,
-            username=username,
-            password=password,
-            database=database,
-            query=unix_socket,
-        )
-
-    return sqlalchemy.create_engine(
-        connection_string,
-        pool_size=pool_size,
-        max_overflow=max_overflow,
-        pool_timeout=pool_timeout,
-        pool_recycle=pool_recycle,
-    )
 
 
 def list_blobs(bucket_name: str, delimiter: str = "/") -> List[str]:
