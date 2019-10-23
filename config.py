@@ -17,4 +17,4 @@ CSQL_CONNECTION = "jamie-alice-classifier-251416:us-west2:samoyed-captcha"
 DB_NAME = "api-calls"
 
 # AutoML settings
-MODEL_ID = 'ICN991804081743931461'
+MODEL_ID = 'ICN837947968947485922'

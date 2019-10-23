@@ -15,7 +15,7 @@ def cloudsql_postgres(
     password: str=DB_PWD,
     database: str=DB_NAME,
     driver: str = "postgres+pg8000",
-    pool_size: int = 5,
+    pool_size: int = 50,
     max_overflow: int = 2,
     pool_timeout: int = 30,
     pool_recycle: int = 1800,
